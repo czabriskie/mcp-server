@@ -1,0 +1,107 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcp-weather-server"
+version = "0.1.0"
+description = "MCP Server for weather data via National Weather Service API"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    {name = "Cameron Zabriskie"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "mcp>=0.1.0",
+    "httpx>=0.24.0",
+]
+
+[project.optional-dependencies]
+web = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "boto3>=1.28.0",
+    "botocore>=1.31.0",
+    "pydantic>=2.0.0",
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+]
+all = [
+    "mcp-weather-server[web,dev]"
+]
+
+[project.scripts]
+mcp-weather-server = "mcp_weather_server.server:main"
+
+[tool.setuptools]
+packages = {find = {where = ["src"]}}
+
+[tool.setuptools.package-data]
+mcp_weather_server = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "-ra",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["*/tests/*", "*/web_app/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "mcp.*"
+ignore_missing_imports = true
