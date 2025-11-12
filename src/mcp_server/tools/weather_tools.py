@@ -1,13 +1,14 @@
 """Weather tools for the MCP server."""
 
-from typing import Optional
+from typing import Any
+
 from .api_client import NWSAPIClient
 
 
 class WeatherTools:
     """Weather-related tools for the MCP server."""
 
-    def __init__(self, api_client: Optional[NWSAPIClient] = None):
+    def __init__(self, api_client: NWSAPIClient | None = None) -> None:
         """Initialize weather tools.
 
         Args:
@@ -15,7 +16,7 @@ class WeatherTools:
         """
         self.api_client = api_client or NWSAPIClient()
 
-    def format_alert(self, feature: dict) -> str:
+    def format_alert(self, feature: dict[str, Any]) -> str:
         """Format an alert feature into a readable string.
 
         Args:
@@ -26,11 +27,11 @@ class WeatherTools:
         """
         props = feature["properties"]
         return f"""
-Event: {props.get('event', 'Unknown')}
-Area: {props.get('areaDesc', 'Unknown')}
-Severity: {props.get('severity', 'Unknown')}
-Description: {props.get('description', 'No description available')}
-Instructions: {props.get('instruction', 'No specific instructions provided')}
+Event: {props.get("event", "Unknown")}
+Area: {props.get("areaDesc", "Unknown")}
+Severity: {props.get("severity", "Unknown")}
+Description: {props.get("description", "No description available")}
+Instructions: {props.get("instruction", "No specific instructions provided")}
 """
 
     async def get_alerts(self, state: str) -> str:
@@ -77,10 +78,10 @@ Instructions: {props.get('instruction', 'No specific instructions provided')}
         forecasts = []
         for period in periods[:5]:  # Only show next 5 periods
             forecast = f"""
-{period['name']}:
-Temperature: {period['temperature']}°{period['temperatureUnit']}
-Wind: {period['windSpeed']} {period['windDirection']}
-Forecast: {period['detailedForecast']}
+{period["name"]}:
+Temperature: {period["temperature"]}°{period["temperatureUnit"]}
+Wind: {period["windSpeed"]} {period["windDirection"]}
+Forecast: {period["detailedForecast"]}
 """
             forecasts.append(forecast)
 

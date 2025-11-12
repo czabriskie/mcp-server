@@ -1,29 +1,48 @@
-import json
-from typing import Optional, Any
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, StreamingResponse
-from pydantic import BaseModel
-import boto3
-from botocore.exceptions import ClientError
 import asyncio
-import httpx
+import json
+import os
+from contextlib import asynccontextmanager
+from datetime import datetime
+from typing import Any
+
+import boto3
+from botocore.config import Config
+from botocore.exceptions import ClientError
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from pydantic import BaseModel
+
+# Configure boto3 with retry settings
+boto_config = Config(
+    retries={
+        "max_attempts": 10,
+        "mode": "adaptive",  # Uses adaptive retry mode which backs off on throttling
+    }
+)
 
 # Initialize AWS Bedrock client
+# Region can be set via AWS_REGION or AWS_DEFAULT_REGION environment variable
 bedrock_runtime = boto3.client(
     service_name="bedrock-runtime",
-    region_name="us-west-2"
+    region_name=os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1")),
+    config=boto_config,
 )
 
 # MCP client session and tools
-mcp_session: Optional[ClientSession] = None
+mcp_session: ClientSession | None = None
 mcp_tools: list[dict[str, Any]] = []
 mcp_read = None
 mcp_write = None
+
+# MCP Server Configuration - Can be customized via environment variables
+# Example: export MCP_SERVER_COMMAND="node"
+#          export MCP_SERVER_ARGS="path/to/server.js,--option,value"
+MCP_SERVER_COMMAND = os.environ.get("MCP_SERVER_COMMAND", "python")
+MCP_SERVER_ARGS = os.environ.get("MCP_SERVER_ARGS", "-m,mcp_server.server").split(",")
 
 
 @asynccontextmanager
@@ -32,9 +51,11 @@ async def lifespan(app: FastAPI):
     global mcp_session, mcp_tools, mcp_read, mcp_write
 
     # Startup: Initialize MCP connection
+    print(f"Starting MCP server: {MCP_SERVER_COMMAND} {' '.join(MCP_SERVER_ARGS)}")
+
     server_params = StdioServerParameters(
-        command="python",
-        args=["-m", "mcp_weather_server.server"],
+        command=MCP_SERVER_COMMAND,
+        args=MCP_SERVER_ARGS,
     )
 
     stdio = stdio_client(server_params)
@@ -50,11 +71,7 @@ async def lifespan(app: FastAPI):
     # List available tools
     tools_result = await session.list_tools()
     mcp_tools = [
-        {
-            "name": tool.name,
-            "description": tool.description,
-            "input_schema": tool.inputSchema
-        }
+        {"name": tool.name, "description": tool.description, "input_schema": tool.inputSchema}
         for tool in tools_result.tools
     ]
     print(f"Connected to MCP server. Available tools: {[t['name'] for t in mcp_tools]}")
@@ -78,16 +95,35 @@ app.add_middleware(
 )
 
 
-async def handle_claude_with_tools(model_id: str, body: dict, messages: list) -> str:
-    """Handle Claude's tool use loop"""
+async def handle_claude_with_tools(
+    model_id: str, body: dict, messages: list, client_ip: str | None = None
+) -> str:
+    """Handle Claude's tool use loop with throttling protection
+
+    Args:
+        model_id: The Bedrock model ID to use
+        body: The request body for the model
+        messages: The conversation messages
+        client_ip: Optional client IP address to pass to tools that need it
+    """
     max_iterations = 5
 
     for iteration in range(max_iterations):
-        # Call Claude
-        response = bedrock_runtime.invoke_model(
-            modelId=model_id,
-            body=json.dumps(body)
-        )
+        # Add small delay between iterations to avoid throttling
+        if iteration > 0:
+            await asyncio.sleep(0.2)  # 200ms delay between tool iterations
+
+        # Call Claude with retry handling
+        try:
+            response = bedrock_runtime.invoke_model(modelId=model_id, body=json.dumps(body))
+        except ClientError as e:
+            error_code = e.response["Error"]["Code"]
+            if error_code == "ThrottlingException":
+                # Wait and retry once more
+                await asyncio.sleep(2)
+                response = bedrock_runtime.invoke_model(modelId=model_id, body=json.dumps(body))
+            else:
+                raise
 
         response_body = json.loads(response["body"].read())
 
@@ -110,21 +146,33 @@ async def handle_claude_with_tools(model_id: str, body: dict, messages: list) ->
                     tool_input = block.get("input", {})
                     tool_use_id = block.get("id")
 
+                    # Inject client IP for get_current_time tool if available
+                    if tool_name == "get_current_time" and client_ip:
+                        # Only add IP if not already provided by the user
+                        if "ip_address" not in tool_input or not tool_input.get("ip_address"):
+                            tool_input["ip_address"] = client_ip
+
                     # Call the MCP tool
                     try:
                         result = await mcp_session.call_tool(tool_name, arguments=tool_input)
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": tool_use_id,
-                            "content": str(result.content[0].text) if result.content else "No result"
-                        })
+                        tool_results.append(
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": tool_use_id,
+                                "content": str(result.content[0].text)
+                                if result.content
+                                else "No result",
+                            }
+                        )
                     except Exception as e:
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": tool_use_id,
-                            "content": f"Error: {str(e)}",
-                            "is_error": True
-                        })
+                        tool_results.append(
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": tool_use_id,
+                                "content": f"Error: {str(e)}",
+                                "is_error": True,
+                            }
+                        )
 
             # Add tool results as user message
             messages.append({"role": "user", "content": tool_results})
@@ -135,38 +183,46 @@ async def handle_claude_with_tools(model_id: str, body: dict, messages: list) ->
         elif stop_reason == "end_turn":
             # Claude is done, extract final response
             content_blocks = response_body.get("content", [])
-            text_parts = [block.get("text", "") for block in content_blocks if block.get("type") == "text"]
+            text_parts = [
+                block.get("text", "") for block in content_blocks if block.get("type") == "text"
+            ]
             return "\n".join(text_parts)
         else:
             # Unexpected stop reason
             content_blocks = response_body.get("content", [])
-            text_parts = [block.get("text", "") for block in content_blocks if block.get("type") == "text"]
+            text_parts = [
+                block.get("text", "") for block in content_blocks if block.get("type") == "text"
+            ]
             return "\n".join(text_parts) if text_parts else f"Stopped with reason: {stop_reason}"
 
     return "Maximum iterations reached while processing tool calls."
+
 
 class ChatMessage(BaseModel):
     role: str
     content: str
 
+
 class ChatRequest(BaseModel):
     messages: list[ChatMessage]
-    # Claude 3.5 Sonnet v2 - supports MCP tools
-    # If this doesn't work, try: "anthropic.claude-3-5-sonnet-20240620-v1:0"
-    model: str = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+    # Default to Claude 3.5 Sonnet v1 - verified to work with MCP tools
+    model: str = "anthropic.claude-3-5-sonnet-20240620-v1:0"
     max_tokens: int = 4096
     temperature: float = 1.0
     stream: bool = False
+
 
 class ChatResponse(BaseModel):
     response: str
     model: str
 
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """Serve the chat interface"""
-    with open("static/index.html", "r") as f:
+    with open("static/index.html") as f:
         return f.read()
+
 
 @app.get("/models")
 async def list_models():
@@ -174,33 +230,65 @@ async def list_models():
     try:
         bedrock = boto3.client(
             service_name="bedrock",
-            region_name="us-west-2"
+            region_name=os.environ.get(
+                "AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+            ),
         )
         response = bedrock.list_foundation_models()
 
         # Filter for active models that support on-demand
         models = []
-        for model in response.get('modelSummaries', []):
-            if model.get('modelLifecycle', {}).get('status') == 'ACTIVE':
-                models.append({
-                    'id': model['modelId'],
-                    'name': model['modelName'],
-                    'provider': model['providerName']
-                })
+        for model in response.get("modelSummaries", []):
+            if model.get("modelLifecycle", {}).get("status") == "ACTIVE":
+                models.append(
+                    {
+                        "id": model["modelId"],
+                        "name": model["modelName"],
+                        "provider": model["providerName"],
+                    }
+                )
 
         return {"models": models}
     except ClientError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
 
 @app.post("/chat")
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, http_request: Request):
     """Handle chat requests to AWS Bedrock with MCP tool support"""
     try:
+        # Get client IP address for tools that need it (like get_current_time)
+        client_ip = http_request.client.host if http_request.client else None
+
         # Convert messages to Claude format
         messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
+        # Generate current local time context for time-sensitive answers
+        system_prompt = None
+        try:
+            now = datetime.now().astimezone()
+            now_iso = now.isoformat()
+            now_str = now.strftime("%A, %B %d, %Y %H:%M:%S %Z%z")
+            system_prompt = (
+                f"Current local time: {now_str} (ISO: {now_iso}). "
+                "Use this timestamp for any time-sensitive answers. "
+                "\n\nFor weather requests:"
+                "\n1. First call get_current_time to attempt location detection from IP"
+                "\n2. If coordinates are provided in the response, use them for get_forecast"
+                "\n3. If no coordinates are returned, politely ask the user for their location (city/state or lat/lon)"
+                "\n4. Never make up coordinates or assume a location"
+            )
+        except Exception:
+            # If timezone retrieval fails, continue without system prompt
+            pass
+
+        # Determine if model is Claude (including inference profiles)
+        is_claude = (
+            "anthropic.claude" in request.model or "anthropic.claude" in request.model.lower()
+        )
+
         # Prepare the request body based on model family
-        if "anthropic.claude" in request.model:
+        if is_claude:
             body = {
                 "anthropic_version": "bedrock-2023-05-31",
                 "max_tokens": request.max_tokens,
@@ -208,12 +296,16 @@ async def chat(request: ChatRequest):
                 "messages": messages,
             }
 
+            # Add system prompt if available
+            if system_prompt:
+                body["system"] = system_prompt
+
             # Add MCP tools to Claude request
             if mcp_tools:
                 body["tools"] = mcp_tools
 
             # Tool use loop for Claude
-            response_text = await handle_claude_with_tools(request.model, body, messages)
+            response_text = await handle_claude_with_tools(request.model, body, messages, client_ip)
             return ChatResponse(response=response_text, model=request.model)
         elif "meta.llama" in request.model:
             # Llama format
@@ -230,7 +322,7 @@ async def chat(request: ChatRequest):
                 "textGenerationConfig": {
                     "maxTokenCount": request.max_tokens,
                     "temperature": request.temperature,
-                }
+                },
             }
         else:
             # Default to Claude format
@@ -238,69 +330,67 @@ async def chat(request: ChatRequest):
                 "anthropic_version": "bedrock-2023-05-31",
                 "max_tokens": request.max_tokens,
                 "temperature": request.temperature,
-                "messages": messages
+                "messages": messages,
             }
 
         if request.stream:
             return StreamingResponse(
-                stream_bedrock_response(request.model, body),
-                media_type="text/event-stream"
+                stream_bedrock_response(request.model, body), media_type="text/event-stream"
             )
         else:
             # Invoke the model
-            response = bedrock_runtime.invoke_model(
-                modelId=request.model,
-                body=json.dumps(body)
-            )
+            response = bedrock_runtime.invoke_model(modelId=request.model, body=json.dumps(body))
 
             # Parse response
-            response_body = json.loads(response['body'].read())
+            response_body = json.loads(response["body"].read())
 
             # Extract text based on model family
             if "anthropic.claude" in request.model:
-                response_text = response_body['content'][0]['text']
+                response_text = response_body["content"][0]["text"]
             elif "meta.llama" in request.model:
-                response_text = response_body['generation']
+                response_text = response_body["generation"]
             elif "amazon.titan" in request.model:
-                response_text = response_body['results'][0]['outputText']
+                response_text = response_body["results"][0]["outputText"]
             else:
                 response_text = str(response_body)
 
             return ChatResponse(response=response_text, model=request.model)
 
     except ClientError as e:
-        raise HTTPException(status_code=500, detail=f"AWS Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"AWS Error: {str(e)}") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}") from e
+
 
 async def stream_bedrock_response(model_id: str, body: dict):
     """Stream responses from Bedrock"""
     try:
         response = bedrock_runtime.invoke_model_with_response_stream(
-            modelId=model_id,
-            body=json.dumps(body)
+            modelId=model_id, body=json.dumps(body)
         )
 
-        for event in response['body']:
-            chunk = event.get('chunk')
+        for event in response["body"]:
+            chunk = event.get("chunk")
             if chunk:
-                chunk_data = json.loads(chunk['bytes'])
+                chunk_data = json.loads(chunk["bytes"])
 
                 # Extract text based on model
                 if "anthropic.claude" in model_id:
-                    if chunk_data.get('type') == 'content_block_delta':
-                        text = chunk_data.get('delta', {}).get('text', '')
+                    if chunk_data.get("type") == "content_block_delta":
+                        text = chunk_data.get("delta", {}).get("text", "")
                         if text:
                             yield f"data: {json.dumps({'text': text})}\n\n"
-                    elif chunk_data.get('type') == 'message_stop':
+                    elif chunk_data.get("type") == "message_stop":
                         yield f"data: {json.dumps({'done': True})}\n\n"
 
     except Exception as e:
         yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
 
 # Mount static files (will create this next)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -1,10 +1,11 @@
 """Tests for the National Weather Service API client."""
 
-import pytest
-from unittest.mock import AsyncMock, patch, Mock
-import httpx
+from unittest.mock import AsyncMock, Mock, patch
 
-from mcp_weather_server.api_client import NWSAPIClient
+import pytest
+
+from mcp_server.tools.api_client import NWSAPIClient
+
 
 class TestNWSAPIClient:
     """Test suite for NWSAPIClient."""
@@ -28,14 +29,7 @@ class TestNWSAPIClient:
         """
         # Arrange
         mock_response_data = {
-            "features": [
-                {
-                    "properties": {
-                        "event": "Tornado Warning",
-                        "areaDesc": "Test Area"
-                    }
-                }
-            ]
+            "features": [{"properties": {"event": "Tornado Warning", "areaDesc": "Test Area"}}]
         }
 
         with patch("httpx.AsyncClient") as mock_client_class:
@@ -89,19 +83,11 @@ class TestNWSAPIClient:
         """
         # Arrange
         mock_points_data = {
-            "properties": {
-                "forecast": "https://api.weather.gov/gridpoints/MTR/85,105/forecast"
-            }
+            "properties": {"forecast": "https://api.weather.gov/gridpoints/MTR/85,105/forecast"}
         }
         mock_forecast_data = {
             "properties": {
-                "periods": [
-                    {
-                        "name": "Tonight",
-                        "temperature": 45,
-                        "temperatureUnit": "F"
-                    }
-                ]
+                "periods": [{"name": "Tonight", "temperature": 45, "temperatureUnit": "F"}]
             }
         }
 

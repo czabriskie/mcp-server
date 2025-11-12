@@ -1,9 +1,11 @@
 """Tests for weather tools."""
 
-import pytest
 from unittest.mock import AsyncMock
-from mcp_weather_server.tools import WeatherTools
-from mcp_weather_server.api_client import NWSAPIClient
+
+import pytest
+
+from mcp_server.tools.api_client import NWSAPIClient
+from mcp_server.tools.weather_tools import WeatherTools
 
 
 class TestWeatherTools:
@@ -44,7 +46,7 @@ class TestWeatherTools:
                 "areaDesc": "Los Angeles County",
                 "severity": "Severe",
                 "description": "Tornado spotted",
-                "instruction": "Take shelter immediately"
+                "instruction": "Take shelter immediately",
             }
         }
 
@@ -66,9 +68,7 @@ class TestWeatherTools:
         Assert: Uses default values for missing fields
         """
         # Arrange
-        feature = {
-            "properties": {}
-        }
+        feature = {"properties": {}}
 
         # Act
         result = weather_tools.format_alert(feature)
@@ -95,7 +95,7 @@ class TestWeatherTools:
                         "areaDesc": "Bay Area",
                         "severity": "Moderate",
                         "description": "Heavy rain expected",
-                        "instruction": "Avoid low-lying areas"
+                        "instruction": "Avoid low-lying areas",
                     }
                 }
             ]
@@ -161,7 +161,7 @@ class TestWeatherTools:
                         "temperatureUnit": "F",
                         "windSpeed": "10 mph",
                         "windDirection": "NW",
-                        "detailedForecast": "Clear skies"
+                        "detailedForecast": "Clear skies",
                     },
                     {
                         "name": "Tomorrow",
@@ -169,8 +169,8 @@ class TestWeatherTools:
                         "temperatureUnit": "F",
                         "windSpeed": "5 mph",
                         "windDirection": "N",
-                        "detailedForecast": "Sunny"
-                    }
+                        "detailedForecast": "Sunny",
+                    },
                 ]
             }
         }
@@ -235,13 +235,11 @@ class TestWeatherTools:
                 "temperatureUnit": "F",
                 "windSpeed": "10 mph",
                 "windDirection": "N",
-                "detailedForecast": f"Forecast {i}"
+                "detailedForecast": f"Forecast {i}",
             }
             for i in range(10)
         ]
-        mock_api_client.get_forecast.return_value = {
-            "properties": {"periods": periods}
-        }
+        mock_api_client.get_forecast.return_value = {"properties": {"periods": periods}}
 
         # Act
         result = await weather_tools.get_forecast(37.7749, -122.4194)

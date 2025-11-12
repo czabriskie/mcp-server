@@ -1,12 +1,12 @@
 # Quick Start Guide
 
-Get up and running with MCP Weather Server in 5 minutes.
+Get up and running with MCP Server in 5 minutes.
 
 ## Installation
 
 ```bash
 # Clone or navigate to the project
-cd mcp-weather-server
+cd mcp-server
 
 # Install the package
 pip install -e .
@@ -17,7 +17,7 @@ pip install -e .
 ### 1. Run the MCP Server
 
 ```bash
-mcp-weather-server
+mcp-server
 ```
 
 The server will start and listen on stdio for MCP protocol messages.
@@ -27,18 +27,22 @@ The server will start and listen on stdio for MCP protocol messages.
 ```python
 # test_server.py
 import asyncio
-from mcp_weather_server.tools import WeatherTools
+from mcp_server.tools.weather_tools import WeatherTools
+from mcp_server.tools.time_tools import TimeTools
 
 async def main():
-    tools = WeatherTools()
-
-    # Get alerts for California
-    alerts = await tools.get_alerts("CA")
+    # Test weather tools
+    weather = WeatherTools()
+    alerts = await weather.get_alerts("CA")
     print(alerts)
 
-    # Get forecast for San Francisco
-    forecast = await tools.get_forecast(37.7749, -122.4194)
+    forecast = await weather.get_forecast(37.7749, -122.4194)
     print(forecast)
+
+    # Test time tools
+    time_tools = TimeTools()
+    time_info = await time_tools.get_current_time("8.8.8.8")
+    print(time_info)
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -52,7 +56,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 {
   "mcpServers": {
     "weather": {
-      "command": "mcp-weather-server"
+      "command": "mcp-server"
     }
   }
 }
@@ -73,7 +77,7 @@ pip install -e ".[dev]"
 pytest
 
 # With coverage
-pytest --cov=mcp_weather_server
+pytest --cov=mcp_server
 ```
 
 ### Try the Web Interface (Optional)
@@ -93,10 +97,20 @@ Visit http://localhost:8000 to test interactively.
 
 ## Common Use Cases
 
+### Get Current Time
+
+```python
+from mcp_server.tools.time_tools import TimeTools
+
+tools = TimeTools()
+time_info = await tools.get_current_time()  # Auto-detect from IP
+time_info = await tools.get_current_time("8.8.8.8")  # Specific IP
+```
+
 ### Get Weather Alerts
 
 ```python
-from mcp_weather_server.tools import WeatherTools
+from mcp_server.tools.weather_tools import WeatherTools
 
 tools = WeatherTools()
 alerts = await tools.get_alerts("TX")  # Texas alerts
@@ -121,7 +135,7 @@ forecast = await tools.get_forecast(41.8781, -87.6298)
 # Using Python
 python -c "
 import asyncio
-from mcp_weather_server.tools import WeatherTools
+from mcp_server.tools.weather_tools import WeatherTools
 
 async def main():
     tools = WeatherTools()
@@ -134,10 +148,12 @@ asyncio.run(main())
 ## Project Structure
 
 ```
-├── src/mcp_weather_server/    # Main package
+├── src/mcp_server/    # Main package
 │   ├── server.py               # MCP server entry point
-│   ├── tools.py                # Weather tools logic
-│   └── api_client.py           # NWS API client
+│   └── tools/                  # Tool modules
+│       ├── weather_tools.py    # Weather tools logic
+│       ├── time_tools.py       # Time/geolocation tools
+│       └── api_client.py       # NWS API client
 ├── tests/                      # Test suite
 ├── web_app/                    # Optional web interface
 └── pyproject.toml              # Project configuration
@@ -148,7 +164,7 @@ asyncio.run(main())
 - Read the [full README](README.md) for detailed documentation
 - Check out [CONTRIBUTING.md](CONTRIBUTING.md) to contribute
 - See [AWS_SETUP.md](AWS_SETUP.md) for web app configuration
-- Browse the code in `src/mcp_weather_server/` to understand the implementation
+- Browse the code in `src/mcp_server/` to understand the implementation
 
 ## Troubleshooting
 

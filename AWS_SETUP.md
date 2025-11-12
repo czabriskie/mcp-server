@@ -98,7 +98,7 @@ If you don't see access granted for certain models, you can request access by cl
 3. Enter your credentials when prompted:
    - **AWS Access Key ID**: [Your access key]
    - **AWS Secret Access Key**: [Your secret key]
-   - **Default region name**: `us-east-1` (or your preferred region)
+   - **Default region name**: `us-east-1` (or your preferred region like us-west-2, eu-central-1)
    - **Default output format**: `json`
 
 ### Option B: Create IAM User with Bedrock Access
@@ -121,13 +121,14 @@ If you don't see access granted for certain models, you can request access by cl
      ```bash
      export AWS_ACCESS_KEY_ID="your-access-key"
      export AWS_SECRET_ACCESS_KEY="your-secret-key"
-     export AWS_DEFAULT_REGION="us-east-1"
+     export AWS_REGION="us-east-1"  # or us-west-2, eu-central-1, etc.
      ```
    - **Option 3**: Create `~/.aws/credentials` file:
      ```ini
      [default]
      aws_access_key_id = your-access-key
      aws_secret_access_key = your-secret-key
+     region = us-east-1
      ```
 
 ## Step 5: Verify Setup (Optional)
@@ -155,18 +156,20 @@ pip install -e .
 pip install fastapi uvicorn boto3 httpx
 ```
 
-## Step 7: Update Region in app.py
+## Step 7: Configure AWS Region
 
-I noticed you're using `us-west-2`. Update the region in `app.py` to match:
+The application reads the AWS region from environment variables with the following priority:
+1. `AWS_REGION` environment variable
+2. `AWS_DEFAULT_REGION` environment variable
+3. Falls back to `us-east-1` if neither is set
 
-```python
-bedrock_runtime = boto3.client(
-    service_name='bedrock-runtime',
-    region_name='us-west-2'  # Your region
-)
+Set your preferred region:
+
+```bash
+export AWS_REGION='us-east-1'  # or us-west-2, eu-central-1, ap-northeast-1, etc.
 ```
 
-Also update the region in the `/models` endpoint around line 55.
+**Note:** Model availability varies by region. `us-east-1` typically has the most comprehensive Claude model selection.
 
 ## Step 8: Run the Application
 
@@ -194,7 +197,8 @@ Then open your browser to: http://localhost:8000
 
 ### "ResourceNotFoundException"
 - The model might not be available in your current region
-- Try switching to `us-east-1` which has the most models
+- Try switching regions: `export AWS_REGION='us-east-1'` or `export AWS_REGION='us-west-2'`
+- Check available models in your region: `python examples/check_models.py`
 
 ### "ThrottlingException"
 - You're making too many requests

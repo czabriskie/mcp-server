@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mcp-weather-server"
+name = "mcp-server"
 version = "0.1.0"
-description = "MCP Server for weather data via National Weather Service API"
+description = "Multi-purpose MCP Server with weather, time, and extensible tool support"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
@@ -38,19 +38,20 @@ dev = [
     "pytest-cov>=4.1.0",
     "ruff>=0.1.0",
     "mypy>=1.5.0",
+    "bandit>=1.7.5",
 ]
 all = [
-    "mcp-weather-server[web,dev]"
+    "mcp-server[web,dev]"
 ]
 
 [project.scripts]
-mcp-weather-server = "mcp_weather_server.server:main"
+mcp-server = "mcp_server.server:main"
 
 [tool.setuptools]
 packages = {find = {where = ["src"]}}
 
 [tool.setuptools.package-data]
-mcp_weather_server = ["py.typed"]
+mcp_server = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -105,3 +106,7 @@ disallow_untyped_defs = true
 [[tool.mypy.overrides]]
 module = "mcp.*"
 ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "venv"]
+skips = ["B101", "B110"]  # Skip assert_used and try_except_pass

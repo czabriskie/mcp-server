@@ -1,6 +1,7 @@
 """API client for National Weather Service."""
 
-from typing import Any, Optional
+from typing import Any
+
 import httpx
 
 
@@ -17,12 +18,9 @@ class NWSAPIClient:
             timeout: Request timeout in seconds
         """
         self.timeout = timeout
-        self.headers = {
-            "User-Agent": self.USER_AGENT,
-            "Accept": "application/geo+json"
-        }
+        self.headers = {"User-Agent": self.USER_AGENT, "Accept": "application/geo+json"}
 
-    async def get_alerts(self, state: str) -> Optional[dict[str, Any]]:
+    async def get_alerts(self, state: str) -> dict[str, Any] | None:
         """Get weather alerts for a US state.
 
         Args:
@@ -34,7 +32,7 @@ class NWSAPIClient:
         url = f"{self.BASE_URL}/alerts/active/area/{state}"
         return await self._make_request(url)
 
-    async def get_forecast(self, latitude: float, longitude: float) -> Optional[dict[str, Any]]:
+    async def get_forecast(self, latitude: float, longitude: float) -> dict[str, Any] | None:
         """Get weather forecast for coordinates.
 
         Args:
@@ -58,7 +56,7 @@ class NWSAPIClient:
         except (KeyError, TypeError):
             return None
 
-    async def _make_request(self, url: str) -> Optional[dict[str, Any]]:
+    async def _make_request(self, url: str) -> dict[str, Any] | None:
         """Make an HTTP request to the NWS API.
 
         Args:
@@ -69,12 +67,9 @@ class NWSAPIClient:
         """
         async with httpx.AsyncClient() as client:
             try:
-                response = await client.get(
-                    url,
-                    headers=self.headers,
-                    timeout=self.timeout
-                )
+                response = await client.get(url, headers=self.headers, timeout=self.timeout)
                 response.raise_for_status()
-                return response.json()
+                data: dict[str, Any] = response.json()
+                return data
             except (httpx.HTTPError, Exception):
                 return None

@@ -2,6 +2,7 @@
 """Test script to find the correct Claude model identifier."""
 
 import json
+import os
 import boto3
 from botocore.exceptions import ClientError
 
@@ -46,6 +47,9 @@ def test_model(bedrock_runtime, model_id):
 
 
 def main():
+    # Get region from environment or default to us-east-1
+    region = os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
+
     print("=" * 80)
     print("TESTING CLAUDE MODEL IDENTIFIERS")
     print("=" * 80)
@@ -54,9 +58,9 @@ def main():
     try:
         bedrock_runtime = boto3.client(
             service_name="bedrock-runtime",
-            region_name="us-west-2"
+            region_name=region
         )
-        print("✅ Connected to AWS Bedrock in us-west-2")
+        print(f"✅ Connected to AWS Bedrock in {region}")
         print()
     except Exception as e:
         print(f"❌ Failed to connect to AWS Bedrock: {e}")
@@ -64,7 +68,7 @@ def main():
         print("Make sure you've exported your AWS credentials:")
         print("  export AWS_ACCESS_KEY_ID='your-key'")
         print("  export AWS_SECRET_ACCESS_KEY='your-secret'")
-        print("  export AWS_DEFAULT_REGION='us-west-2'")
+        print("  export AWS_REGION='us-east-1'  # or your preferred region")
         return
 
     print("Testing model identifiers...\n")
@@ -100,7 +104,7 @@ def main():
         print("This usually means:")
         print("  1. You haven't requested access to Claude models in Bedrock console")
         print("  2. Your use case form hasn't been approved yet")
-        print("  3. Claude models aren't available in us-west-2 (try us-east-1)")
+        print(f"  3. Claude models aren't available in {region} (try us-east-1 or us-west-2)")
         print()
         print("To request access:")
         print("  1. Go to https://console.aws.amazon.com/bedrock/")

@@ -1,21 +1,26 @@
 #!/usr/bin/env python3
 """Quick script to check which Bedrock models you have access to."""
 
+import os
 import boto3
 from botocore.exceptions import ClientError
 
+
 def check_bedrock_models():
     """List all available Bedrock models in your account."""
+    # Get region from environment or default to us-east-1
+    region = os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
+
     try:
         bedrock = boto3.client(
             service_name="bedrock",
-            region_name="us-west-2"
+            region_name=region
         )
 
         response = bedrock.list_foundation_models()
 
         print("=" * 80)
-        print("AVAILABLE BEDROCK MODELS IN us-west-2")
+        print(f"AVAILABLE BEDROCK MODELS IN {region}")
         print("=" * 80)
 
         # Group by provider
