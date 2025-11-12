@@ -20,9 +20,13 @@ mcp-server/
 │       ├── server.py          # Generic MCP server (add your tools here!)
 │       └── tools/              # Organized tool modules
 │           ├── __init__.py
-│           ├── weather_tools.py   # Weather tool implementations (example)
-│           ├── time_tools.py      # IP-based time/location detection
-│           └── api_client.py      # NWS API client (example)
+│           ├── weather/        # Weather tool module
+│           │   ├── __init__.py
+│           │   ├── weather_tools.py
+│           │   └── nws_client.py
+│           └── time/           # Time/location tool module
+│               ├── __init__.py
+│               └── time_tools.py
 ├── tests/
 │   ├── __init__.py
 │   ├── test_api_client.py     # API client tests
@@ -393,17 +397,13 @@ The web app will automatically:
 
 ### Modular Design
 
-- **`tools/api_client.py`**: HTTP client for NWS API
-  - Handles all API communication
-  - Error handling and retries
-  - Type-safe responses
+- **`tools/weather/`**: Weather forecasting module
+  - `nws_client.py`: HTTP client for NWS API
+  - `weather_tools.py`: Business logic for weather tools
+  - Handles API communication, error handling, data formatting
 
-- **`tools/weather_tools.py`**: Business logic for weather tools
-  - Data formatting
-  - Tool implementations
-  - Independent of MCP protocol
-
-- **`tools/time_tools.py`**: IP-based geolocation and time detection
+- **`tools/time/`**: Time and geolocation module
+  - `time_tools.py`: IP-based geolocation and time detection
   - Dual-service fallback (ip-api.com + ipinfo.io)
   - Timezone detection from coordinates
   - Localhost/private IP handling
@@ -443,7 +443,7 @@ async def test_get_alerts_success(self, weather_tools, mock_api_client):
 ### NWSAPIClient
 
 ```python
-from mcp_server.tools.api_client import NWSAPIClient
+from mcp_server.tools.weather import NWSAPIClient
 
 client = NWSAPIClient(timeout=30.0)
 alerts = await client.get_alerts("CA")
@@ -453,7 +453,7 @@ forecast = await client.get_forecast(37.7749, -122.4194)
 ### WeatherTools
 
 ```python
-from mcp_server.tools.weather_tools import WeatherTools
+from mcp_server.tools.weather import WeatherTools
 
 tools = WeatherTools()
 alerts_text = await tools.get_alerts("NY")
@@ -463,7 +463,7 @@ forecast_text = await tools.get_forecast(40.7128, -74.0060)
 ### TimeTools
 
 ```python
-from mcp_server.tools.time_tools import TimeTools
+from mcp_server.tools.time import TimeTools
 
 tools = TimeTools()
 time_info = await tools.get_current_time("8.8.8.8")  # Returns JSON with time, timezone, location

@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from mcp_server.tools.api_client import NWSAPIClient
+from mcp_server.tools.weather import NWSAPIClient
 
 
 class TestNWSAPIClient:

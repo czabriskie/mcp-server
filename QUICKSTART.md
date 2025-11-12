@@ -27,8 +27,8 @@ The server will start and listen on stdio for MCP protocol messages.
 ```python
 # test_server.py
 import asyncio
-from mcp_server.tools.weather_tools import WeatherTools
-from mcp_server.tools.time_tools import TimeTools
+from mcp_server.tools.weather import WeatherTools
+from mcp_server.tools.time import TimeTools
 
 async def main():
     # Test weather tools
@@ -120,7 +120,7 @@ Visit http://localhost:8000 to test interactively.
 ### Get Current Time
 
 ```python
-from mcp_server.tools.time_tools import TimeTools
+from mcp_server.tools.time import TimeTools
 
 tools = TimeTools()
 time_info = await tools.get_current_time()  # Auto-detect from IP
@@ -130,7 +130,7 @@ time_info = await tools.get_current_time("8.8.8.8")  # Specific IP
 ### Get Weather Alerts
 
 ```python
-from mcp_server.tools.weather_tools import WeatherTools
+from mcp_server.tools.weather import WeatherTools
 
 tools = WeatherTools()
 alerts = await tools.get_alerts("TX")  # Texas alerts
@@ -155,7 +155,7 @@ forecast = await tools.get_forecast(41.8781, -87.6298)
 # Using Python
 python -c "
 import asyncio
-from mcp_server.tools.weather_tools import WeatherTools
+from mcp_server.tools.weather import WeatherTools
 
 async def main():
     tools = WeatherTools()
@@ -168,12 +168,14 @@ asyncio.run(main())
 ## Project Structure
 
 ```
-├── src/mcp_server/    # Main package
-│   ├── server.py               # MCP server entry point
-│   └── tools/                  # Tool modules
-│       ├── weather_tools.py    # Weather tools logic
-│       ├── time_tools.py       # Time/geolocation tools
-│       └── api_client.py       # NWS API client
+├── src/mcp_server/         # Main package
+│   ├── server.py           # MCP server entry point
+│   └── tools/              # Tool modules
+│       ├── weather/        # Weather tools
+│       │   ├── weather_tools.py
+│       │   └── nws_client.py
+│       └── time/           # Time/geolocation tools
+│           └── time_tools.py
 ├── tests/                      # Test suite
 ├── web_app/                    # Optional web interface
 └── pyproject.toml              # Project configuration

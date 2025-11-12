@@ -37,9 +37,11 @@ Thank you for your interest in contributing! This guide will help you add new to
 - `src/mcp_server/` - Core MCP server code
   - `server.py` - MCP server setup and tool registration
   - `tools/` - Organized tool modules
-    - `weather_tools.py` - Weather-related tools
-    - `time_tools.py` - Time and geolocation tools
-    - `api_client.py` - HTTP client for external APIs
+    - `weather/` - Weather tools module
+      - `weather_tools.py` - Weather-related tools
+      - `nws_client.py` - NWS API client
+    - `time/` - Time/geolocation tools module
+      - `time_tools.py` - IP-based time and location detection
 
 - `tests/` - Test suite
   - Follow the same structure as `src/`
@@ -187,7 +189,7 @@ Want to add more weather-related functionality? Follow these steps:
 
 ### Step 1: Add API Method (if needed)
 
-If you need new data from the National Weather Service API, add a method to `src/mcp_server/tools/api_client.py`:
+If you need new data from the National Weather Service API, add a method to `src/mcp_server/tools/weather/nws_client.py`:
 
 ```python
 class NWSAPIClient:
@@ -201,7 +203,7 @@ class NWSAPIClient:
 
 ### Step 2: Add Tool Implementation
 
-Add your tool logic to `src/mcp_server/tools/weather_tools.py`:
+Add your tool logic to `src/mcp_server/tools/weather/weather_tools.py`:
 
 ```python
 class WeatherTools:
@@ -491,7 +493,7 @@ cd web_app && python app.py
 
 To add a new weather tool:
 
-1. **Add API method** in `tools/api_client.py`:
+1. **Add API method** in `tools/weather/nws_client.py`:
    ```python
    async def get_new_data(self, param: str) -> Optional[dict[str, Any]]:
        """Fetch new data from API."""
@@ -499,7 +501,7 @@ To add a new weather tool:
        return await self._make_request(url)
    ```
 
-2. **Add tool method** in `tools/weather_tools.py`:
+2. **Add tool method** in `tools/weather/weather_tools.py`:
    ```python
    async def get_new_tool(self, param: str) -> str:
        """Get new weather data.

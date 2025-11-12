@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from mcp_server.tools.time_tools import TimeTools
+from mcp_server.tools.time import TimeTools
 
 
 class TestTimeTools:

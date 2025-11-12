@@ -198,7 +198,7 @@ class TestMCPToolRegistration:
     @pytest.mark.asyncio
     async def test_tool_returns_structured_response(self):
         """Test that tool returns properly structured response."""
-        from mcp_server.tools.time_tools import TimeTools
+        from mcp_server.tools.time import TimeTools
 
         # Arrange
         time_tools = TimeTools()
@@ -282,7 +282,7 @@ For weather forecasts, please provide your city/state or coordinates manually.""
     @pytest.mark.asyncio
     async def test_time_query_only(self):
         """Test simple time query without weather."""
-        from mcp_server.tools.time_tools import TimeTools
+        from mcp_server.tools.time import TimeTools
 
         # Arrange
         time_tools = TimeTools()
@@ -314,7 +314,7 @@ class TestPerformance:
         """Test that geolocation services respect timeout."""
         import asyncio
 
-        from mcp_server.tools.time_tools import TimeTools
+        from mcp_server.tools.time import TimeTools
 
         # Arrange
         time_tools = TimeTools()
@@ -330,7 +330,7 @@ class TestPerformance:
     @pytest.mark.asyncio
     async def test_multiple_rapid_requests(self):
         """Test handling multiple requests in quick succession."""
-        from mcp_server.tools.time_tools import TimeTools
+        from mcp_server.tools.time import TimeTools
 
         # Arrange
         time_tools = TimeTools()
