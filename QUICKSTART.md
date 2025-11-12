@@ -55,8 +55,27 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 ```json
 {
   "mcpServers": {
-    "weather": {
-      "command": "mcp-server"
+    "mcp-server": {
+      "command": "python3",
+      "args": ["-m", "mcp_server.server"],
+      "env": {
+        "PYTHONPATH": "/Users/YOUR_USERNAME/Code/personal/mcp-server/src"
+      }
+    }
+  }
+}
+```
+
+**Important:** Replace `/Users/YOUR_USERNAME/Code/personal/mcp-server/src` with your actual project path.
+
+Alternatively, if you've installed it in a virtual environment, use the venv's Python:
+
+```json
+{
+  "mcpServers": {
+    "mcp-server": {
+      "command": "/Users/YOUR_USERNAME/Code/personal/mcp-server/.venv/bin/python3",
+      "args": ["-m", "mcp_server.server"]
     }
   }
 }
@@ -64,6 +83,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 
 Restart Claude Desktop and try:
 > "What's the weather forecast for Seattle?"
+> "What time is it in Tokyo?"
 
 ## Development
 
