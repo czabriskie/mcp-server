@@ -153,11 +153,11 @@ Or if using from source:
 }
 ```
 
-### Available Tools
+### Available Tools, Resources, and Prompts
 
-The server currently includes two tool modules as examples. **You can easily add your own custom tools** - see [Adding Custom Tools](#adding-custom-tools) below.
+The server demonstrates all three MCP primitives. **You can easily add your own** - see [Adding Custom Tools](#adding-custom-tools) below.
 
-#### Time Tools
+#### Tools (Actions)
 
 ##### `get_current_time(ip_address: Optional[str] = None) -> str`
 
@@ -174,76 +174,151 @@ get_current_time("8.8.8.8")  # Get time for specific IP
 get_current_time()  # Auto-detect from request
 ```
 
-#### Weather Tools
+#### Resources (Read-Only Data)
 
-##### `get_alerts(state: str) -> str`
+Resources represent cacheable, read-only data accessed via URI patterns.
+
+##### `weather://alerts/{state}`
 
 Get weather alerts for a US state.
 
-**Parameters:**
-- `state` (str): Two-letter US state code (e.g., "CA", "NY", "TX")
+**URI Parameters:**
+- `state`: Two-letter US state code (e.g., "CA", "NY", "TX")
 
 **Returns:** Formatted weather alerts or status message
 
-**Example:**
-```python
-get_alerts("CA")  # Get alerts for California
-```
+**Example URI:** `weather://alerts/CA`
 
-##### `get_forecast(latitude: float, longitude: float) -> str`
+##### `weather://forecast/{latitude}/{longitude}`
 
 Get detailed weather forecast for coordinates.
 
-**Parameters:**
-- `latitude` (float): Latitude coordinate
-- `longitude` (float): Longitude coordinate
+**URI Parameters:**
+- `latitude`: Latitude coordinate
+- `longitude`: Longitude coordinate
 
 **Returns:** 5-period weather forecast
 
-**Example:**
-```python
-get_forecast(37.7749, -122.4194)  # San Francisco forecast
-```
+**Example URI:** `weather://forecast/37.7749/-122.4194`
 
-## Adding Custom Tools
+#### Prompts (Guidance Templates)
 
-The server is designed to be **generic and extensible**. Here's how to add your own tools:
+Prompts help Claude use the server more effectively with structured instructions.
 
-### Quick Example
+##### `analyze_weather_prompt(location: str, coordinates: str = "")`
 
-1. **Open** `src/mcp_server/server.py`
+Multi-step guide for comprehensive weather analysis.
 
-2. **Add your tool** in the designated section:
+**Parameters:**
+- `location`: City/state name (e.g., "Seattle, WA")
+- `coordinates`: Optional "lat,lon" format (e.g., "47.6062,-122.3321")
+
+**Returns:** List of messages guiding Claude through forecast → alerts → summary
+
+##### `timezone_helper_prompt(action: str = "check")`
+
+Helper for timezone operations.
+
+**Parameters:**
+- `action`: Type of help needed ("check", "convert", or "compare")
+
+**Returns:** Contextual prompt for the requested timezone operation
+
+## Adding Custom Tools, Resources, and Prompts
+
+The server is designed to be **generic and extensible**. Here's how to add your own MCP primitives:
+
+### Understanding MCP Primitives
+
+- **Tools** (`@mcp.tool()`): For actions and operations (e.g., "get current time")
+- **Resources** (`@mcp.resource(uri)`): For read-only, cacheable data (e.g., "weather://alerts/CA")
+- **Prompts** (`@mcp.prompt()`): For guidance templates to help Claude use your server
+
+### Quick Examples
+
+#### Adding a Tool (Action)
 
 ```python
 # ========================================
-# Add Your Custom Tools Here
+# Add Your Custom Tools/Resources/Prompts Here
 # ========================================
 
 @mcp.tool()
-async def my_custom_tool(param: str) -> str:
-    """Description of what your tool does.
+async def send_email(to: str, subject: str, body: str) -> str:
+    """Send an email (this is an action).
 
     Args:
-        param: Description of the parameter
+        to: Recipient email address
+        subject: Email subject
+        body: Email body
 
     Returns:
-        Description of the return value
+        Confirmation message
     """
     # Your logic here
-    result = f"Processed: {param}"
-    return result
+    return f"Email sent to {to}"
 ```
 
-3. **Restart the server** - That's it! Your tool is now available.
+#### Adding a Resource (Read-Only Data)
 
-### For Complex Tools
+```python
+@mcp.resource("stocks://quote/{symbol}")
+async def get_stock_quote(symbol: str) -> str:
+    """Get stock quote (this is cacheable data).
+
+    Args:
+        symbol: Stock ticker symbol
+
+    Returns:
+        JSON with current stock price
+    """
+    # Fetch and return data
+    return f'{{"symbol": "{symbol}", "price": 150.00}}'
+```
+
+#### Adding a Prompt (Guidance Template)
+
+```python
+@mcp.prompt(title="Stock Analysis Helper")
+def stock_analysis_prompt(symbol: str) -> str:
+    """Guide Claude through stock analysis.
+
+    Args:
+        symbol: Stock ticker to analyze
+    """
+    return (
+        f"Analyze {symbol} by following these steps:\n"
+        f"1. Get the current quote from stocks://quote/{symbol}\n"
+        "2. Check recent news and trends\n"
+        "3. Provide investment recommendation"
+    )
+```
+
+### When to Use Each Primitive
+
+- **Use Tools** when the operation:
+  - Changes state or performs an action
+  - Requires real-time execution
+  - Examples: send email, create file, start process
+
+- **Use Resources** when the data:
+  - Is read-only (doesn't change state)
+  - Can be cached
+  - Is identified by a URI
+  - Examples: forecasts, quotes, documents
+
+- **Use Prompts** when you want to:
+  - Guide Claude through multi-step workflows
+  - Provide templates for common tasks
+  - Help users discover server capabilities
+
+### For Complex Implementations
 
 For more complex tools with external APIs or databases:
 
-1. Create a new tool module (e.g., `src/mcp_server/tools/my_tools.py`)
+1. Create a new tool module (e.g., `src/mcp_server/tools/my_tools/`)
 2. Import and initialize it in `server.py`
-3. Register your tool methods with `@mcp.tool()` decorators
+3. Register with appropriate decorators
 
 **See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed examples including:**
 - Database tools

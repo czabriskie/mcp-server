@@ -32,9 +32,10 @@ bedrock_runtime = boto3.client(
     config=boto_config,
 )
 
-# MCP client session and tools
+# MCP client session, tools, and resources
 mcp_session: ClientSession | None = None
 mcp_tools: list[dict[str, Any]] = []
+mcp_resources: list[dict[str, Any]] = []
 mcp_read = None
 mcp_write = None
 
@@ -48,7 +49,7 @@ MCP_SERVER_ARGS = os.environ.get("MCP_SERVER_ARGS", "-m,mcp_server.server").spli
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage MCP connection lifecycle"""
-    global mcp_session, mcp_tools, mcp_read, mcp_write
+    global mcp_session, mcp_tools, mcp_resources, mcp_read, mcp_write
 
     # Startup: Initialize MCP connection
     print(f"Starting MCP server: {MCP_SERVER_COMMAND} {' '.join(MCP_SERVER_ARGS)}")
@@ -75,6 +76,19 @@ async def lifespan(app: FastAPI):
         for tool in tools_result.tools
     ]
     print(f"Connected to MCP server. Available tools: {[t['name'] for t in mcp_tools]}")
+
+    # List available resources
+    resources_result = await session.list_resources()
+    mcp_resources = [
+        {
+            "uri": resource.uri,
+            "name": resource.name,
+            "description": resource.description,
+            "mimeType": resource.mimeType,
+        }
+        for resource in resources_result.resources
+    ]
+    print(f"Connected to MCP server. Available resources: {[r['uri'] for r in mcp_resources]}")
 
     yield
 
@@ -134,9 +148,10 @@ async def handle_claude_with_tools(
             # Claude wants to use a tool
             content_blocks = response_body.get("content", [])
 
-            # Build assistant message with tool use
-            assistant_message = {"role": "assistant", "content": content_blocks}
-            messages.append(assistant_message)
+            # Build assistant message with tool use (but only if there's actual content)
+            if content_blocks:
+                assistant_message = {"role": "assistant", "content": content_blocks}
+                messages.append(assistant_message)
 
             # Execute tool calls and collect results
             tool_results = []
@@ -152,18 +167,34 @@ async def handle_claude_with_tools(
                         if "ip_address" not in tool_input or not tool_input.get("ip_address"):
                             tool_input["ip_address"] = client_ip
 
-                    # Call the MCP tool
+                    # Handle resource reading vs tool calling
                     try:
-                        result = await mcp_session.call_tool(tool_name, arguments=tool_input)
-                        tool_results.append(
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": tool_use_id,
-                                "content": str(result.content[0].text)
-                                if result.content
-                                else "No result",
-                            }
-                        )
+                        if tool_name == "read_resource":
+                            # Read an MCP resource
+                            uri = tool_input.get("uri", "")
+                            result = await mcp_session.read_resource(uri)
+                            content = (
+                                str(result.contents[0].text) if result.contents else "No content"
+                            )
+                            tool_results.append(
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": tool_use_id,
+                                    "content": content,
+                                }
+                            )
+                        else:
+                            # Call a regular MCP tool
+                            result = await mcp_session.call_tool(tool_name, arguments=tool_input)
+                            tool_results.append(
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": tool_use_id,
+                                    "content": str(result.content[0].text)
+                                    if result.content
+                                    else "No result",
+                                }
+                            )
                     except Exception as e:
                         tool_results.append(
                             {
@@ -174,8 +205,9 @@ async def handle_claude_with_tools(
                             }
                         )
 
-            # Add tool results as user message
-            messages.append({"role": "user", "content": tool_results})
+            # Add tool results as user message (only if we have results)
+            if tool_results:
+                messages.append({"role": "user", "content": tool_results})
 
             # Update body for next iteration
             body["messages"] = messages
@@ -269,6 +301,19 @@ async def chat(request: ChatRequest, http_request: Request):
             now = datetime.now().astimezone()
             now_iso = now.isoformat()
             now_str = now.strftime("%A, %B %d, %Y %H:%M:%S %Z%z")
+
+            # Build resource list
+            resource_list = (
+                "\n".join(
+                    [
+                        f"  - {r['uri']}: {r.get('description', 'No description')}"
+                        for r in mcp_resources
+                    ]
+                )
+                if mcp_resources
+                else "  (none available)"
+            )
+
             system_prompt = (
                 f"Current local time: {now_str} (ISO: {now_iso}). "
                 "Use this timestamp for any time-sensitive answers. "
@@ -277,6 +322,8 @@ async def chat(request: ChatRequest, http_request: Request):
                 "\n2. If coordinates are provided in the response, use them for get_forecast"
                 "\n3. If no coordinates are returned, politely ask the user for their location (city/state or lat/lon)"
                 "\n4. Never make up coordinates or assume a location"
+                "\n\nAvailable MCP Resources (use read_resource tool to access):"
+                f"\n{resource_list}"
             )
         except Exception:
             # If timezone retrieval fails, continue without system prompt
@@ -300,9 +347,27 @@ async def chat(request: ChatRequest, http_request: Request):
             if system_prompt:
                 body["system"] = system_prompt
 
-            # Add MCP tools to Claude request
+            # Add MCP tools to Claude request (including built-in read_resource tool)
             if mcp_tools:
-                body["tools"] = mcp_tools
+                tools = mcp_tools.copy()
+                # Add read_resource tool for accessing MCP resources
+                tools.append(
+                    {
+                        "name": "read_resource",
+                        "description": "Read an MCP resource by its URI. Use this to access conversation logs, cached weather data, and other resources.",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "uri": {
+                                    "type": "string",
+                                    "description": "The URI of the resource to read (e.g., 'conversation://log', 'weather://cache')",
+                                }
+                            },
+                            "required": ["uri"],
+                        },
+                    }
+                )
+                body["tools"] = tools
 
             # Tool use loop for Claude
             response_text = await handle_claude_with_tools(request.model, body, messages, client_ip)

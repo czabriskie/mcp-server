@@ -3,6 +3,7 @@
 
 import json
 import os
+
 import boto3
 from botocore.exceptions import ClientError
 
@@ -16,31 +17,26 @@ MODELS_TO_TRY = [
     "us.anthropic.claude-3-5-sonnet-20240620-v1:0",
 ]
 
+
 def test_model(bedrock_runtime, model_id):
     """Test if a model ID works."""
     try:
-        body = json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 100,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": "Hello! Just testing."
-                }
-            ]
-        })
-
-        response = bedrock_runtime.invoke_model(
-            modelId=model_id,
-            body=body
+        body = json.dumps(
+            {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 100,
+                "messages": [{"role": "user", "content": "Hello! Just testing."}],
+            }
         )
+
+        _ = bedrock_runtime.invoke_model(modelId=model_id, body=body)
 
         # If we get here, the model works!
         return True, "Success"
 
     except ClientError as e:
-        error_code = e.response['Error']['Code']
-        error_msg = e.response['Error']['Message']
+        error_code = e.response["Error"]["Code"]
+        error_msg = e.response["Error"]["Message"]
         return False, f"{error_code}: {error_msg}"
     except Exception as e:
         return False, str(e)
@@ -56,10 +52,7 @@ def main():
     print()
 
     try:
-        bedrock_runtime = boto3.client(
-            service_name="bedrock-runtime",
-            region_name=region
-        )
+        bedrock_runtime = boto3.client(service_name="bedrock-runtime", region_name=region)
         print(f"✅ Connected to AWS Bedrock in {region}")
         print()
     except Exception as e:
@@ -80,7 +73,7 @@ def main():
         success, message = test_model(bedrock_runtime, model_id)
 
         if success:
-            print(f"  ✅ WORKS!")
+            print("  ✅ WORKS!")
             working_models.append(model_id)
         else:
             print(f"  ❌ {message}")

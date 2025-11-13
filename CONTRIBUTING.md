@@ -187,7 +187,25 @@ ptw
 
 Want to add more weather-related functionality? Follow these steps:
 
-### Step 1: Add API Method (if needed)
+### Choosing the Right Primitive
+
+Before adding functionality, decide which MCP primitive to use:
+
+- **Resource** (`@mcp.resource(uri)`): For read-only, cacheable data
+  - Example: Historical weather data, station lists
+  - Benefits: Can be cached, URI-based access
+
+- **Tool** (`@mcp.tool()`): For actions or operations
+  - Example: Subscribe to alerts, trigger notifications
+  - Benefits: Real-time execution, state changes
+
+- **Prompt** (`@mcp.prompt()`): For guidance templates
+  - Example: How to interpret radar data
+  - Benefits: Helps Claude use your server effectively
+
+### Adding a Resource (Read-Only Data)
+
+#### Step 1: Add API Method (if needed)
 
 If you need new data from the National Weather Service API, add a method to `src/mcp_server/tools/weather/nws_client.py`:
 
@@ -201,9 +219,9 @@ class NWSAPIClient:
         return await self._make_request(url)
 ```
 
-### Step 2: Add Tool Implementation
+#### Step 2: Add Resource Implementation
 
-Add your tool logic to `src/mcp_server/tools/weather/weather_tools.py`:
+Add your implementation to `src/mcp_server/tools/weather/weather_tools.py`:
 
 ```python
 class WeatherTools:
@@ -233,19 +251,59 @@ class WeatherTools:
         return f"Radar stations in {state}:\n" + "\n".join(stations)
 ```
 
-### Step 3: Register the Tool
+#### Step 3: Register as Resource
 
-Register your tool in `src/mcp_server/server.py`:
+Register your resource in `src/mcp_server/server.py`:
 
 ```python
-@mcp.tool()
-async def get_radar_stations(state: str) -> str:
-    """Get radar stations for a US state.
+@mcp.resource("weather://radar/stations/{state}")
+async def get_radar_stations_resource(state: str) -> str:
+    """Radar stations resource for a US state.
 
     Args:
         state: Two-letter US state code (e.g., 'CA', 'NY', 'TX')
     """
     return await weather_tools.get_radar_stations(state)
+```
+
+### Adding a Tool (Action)
+
+If you need to perform an action (not just retrieve data):
+
+```python
+# In server.py
+@mcp.tool()
+async def subscribe_to_alerts(state: str, email: str) -> str:
+    """Subscribe to weather alerts (this is an action).
+
+    Args:
+        state: Two-letter US state code
+        email: Email address for notifications
+    """
+    # Implementation that changes state
+    return f"Subscribed {email} to {state} alerts"
+```
+
+### Adding a Prompt (Guidance)
+
+If you want to help Claude use your resources effectively:
+
+```python
+# In server.py
+@mcp.prompt(title="Radar Analysis Helper")
+def radar_analysis_prompt(state: str) -> str:
+    """Guide Claude through radar analysis.
+
+    Args:
+        state: State code to analyze
+    """
+    return (
+        f"Analyze radar data for {state}:\n"
+        f"1. Read weather://radar/stations/{state}\n"
+        f"2. Check weather://alerts/{state} for active warnings\n"
+        "3. Correlate radar activity with alerts\n"
+        "4. Provide safety recommendations"
+    )
 ```
 
 ### Step 4: Add Tests
@@ -286,12 +344,14 @@ class TestWeatherTools:
 # Run tests
 pytest tests/test_tools.py::TestWeatherTools::test_get_radar_stations_success -v
 
-# Test the tool with the web app
+# Test with the web app
 cd web_app && python app.py
-# Ask Claude: "Show me radar stations in California"
+# For resources, Claude will automatically discover and cache them
+# For tools, ask Claude to perform the action
+# For prompts, they'll guide Claude when relevant
 ```
 
-That's it! Your tool is now available to any MCP client.
+That's it! Your new functionality is now available to any MCP client.
 
 ## Creating Your Own MCP Server
 
@@ -328,19 +388,48 @@ Want to create a completely custom MCP server? Use this project as a template!
 3. **Create your server** (`src/my_mcp_server/server.py`)
    ```python
    from mcp.server.fastmcp import FastMCP
+   from mcp.server.fastmcp.prompts.base import Message, UserMessage
 
    # Initialize FastMCP
    mcp = FastMCP("My MCP Server")
 
+   # Add a tool (action)
    @mcp.tool()
-   async def my_tool(param: str) -> str:
-       """Description of what your tool does.
+   async def my_action(param: str) -> str:
+       """Perform an action.
 
        Args:
            param: Description of parameter
        """
        # Your tool logic here
-       return f"Result for {param}"
+       return f"Action result for {param}"
+
+   # Add a resource (data)
+   @mcp.resource("mydata://{category}/{id}")
+   async def my_data_resource(category: str, id: str) -> str:
+       """Read-only data resource.
+
+       Args:
+           category: Data category
+           id: Item identifier
+       """
+       # Fetch and return data
+       return f'{{"category": "{category}", "id": "{id}", "data": "..."}}'
+
+   # Add a prompt (guidance)
+   @mcp.prompt(title="My Workflow Helper")
+   def my_workflow_prompt(task: str) -> list[Message]:
+       """Guide Claude through a workflow.
+
+       Args:
+           task: Task to perform
+       """
+       return [
+           UserMessage(f"Help me with {task}:"),
+           UserMessage("1. Read mydata://info/details"),
+           UserMessage("2. Perform my_action with relevant params"),
+           UserMessage("3. Summarize the results"),
+       ]
 
    def main():
        """Run the MCP server."""
@@ -385,7 +474,7 @@ The web app will automatically:
 
 ### Examples of Custom Servers
 
-#### Database MCP Server
+#### Database MCP Server (Tool)
 ```python
 from mcp.server.fastmcp import FastMCP
 import sqlite3
@@ -394,7 +483,7 @@ mcp = FastMCP("Database Tools")
 
 @mcp.tool()
 async def query_database(sql: str) -> str:
-    """Execute SQL query.
+    """Execute SQL query (this is an action).
 
     Args:
         sql: SQL query to execute
@@ -405,34 +494,47 @@ async def query_database(sql: str) -> str:
     return str(results)
 ```
 
-#### File System MCP Server
+#### File System MCP Server (Resource)
 ```python
 from mcp.server.fastmcp import FastMCP
 import os
 
 mcp = FastMCP("File System Tools")
 
-@mcp.tool()
-async def list_files(directory: str) -> str:
-    """List files in directory.
+@mcp.resource("files://{path}")
+async def read_file(path: str) -> str:
+    """Read file contents (this is read-only data).
 
     Args:
-        directory: Path to directory
+        path: File path
     """
-    files = os.listdir(directory)
-    return "\n".join(files)
+    with open(path, 'r') as f:
+        return f.read()
+
+@mcp.tool()
+async def create_file(path: str, content: str) -> str:
+    """Create a file (this is an action).
+
+    Args:
+        path: File path
+        content: File content
+    """
+    with open(path, 'w') as f:
+        f.write(content)
+    return f"Created {path}"
 ```
 
-#### API Integration MCP Server
+#### API Integration MCP Server (Mixed)
 ```python
 from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.prompts.base import UserMessage
 import httpx
 
 mcp = FastMCP("API Integration")
 
-@mcp.tool()
+@mcp.resource("api://data/{endpoint}")
 async def fetch_data(endpoint: str) -> str:
-    """Fetch data from API.
+    """Fetch data from API (cacheable).
 
     Args:
         endpoint: API endpoint path
@@ -440,6 +542,31 @@ async def fetch_data(endpoint: str) -> str:
     async with httpx.AsyncClient() as client:
         response = await client.get(f"https://api.example.com/{endpoint}")
         return response.text
+
+@mcp.tool()
+async def post_data(endpoint: str, data: str) -> str:
+    """Post data to API (action).
+
+    Args:
+        endpoint: API endpoint path
+        data: Data to post
+    """
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            f"https://api.example.com/{endpoint}",
+            json=data
+        )
+        return response.text
+
+@mcp.prompt(title="API Usage Guide")
+def api_guide_prompt(task: str) -> str:
+    """Guide for using the API."""
+    return (
+        f"To {task}:\n"
+        "1. First, read api://data/info for available endpoints\n"
+        "2. Use post_data to perform the action\n"
+        "3. Verify with api://data/status"
+    )
 ```
 
 ## Using Custom MCP Servers with the Web App

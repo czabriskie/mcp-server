@@ -8,6 +8,7 @@ This script tests each Claude model to ensure it can:
 
 import json
 import os
+
 import boto3
 from botocore.exceptions import ClientError
 
@@ -15,10 +16,7 @@ from botocore.exceptions import ClientError
 region = os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
 
 # Initialize Bedrock client
-bedrock_runtime = boto3.client(
-    service_name="bedrock-runtime",
-    region_name=region
-)
+bedrock_runtime = boto3.client(service_name="bedrock-runtime", region_name=region)
 
 # Claude models to test (all models shown in web interface)
 MODELS_TO_TEST = [
@@ -36,14 +34,9 @@ TEST_TOOL = {
     "description": "Get weather information for a location",
     "input_schema": {
         "type": "object",
-        "properties": {
-            "location": {
-                "type": "string",
-                "description": "The city or location"
-            }
-        },
-        "required": ["location"]
-    }
+        "properties": {"location": {"type": "string", "description": "The city or location"}},
+        "required": ["location"],
+    },
 }
 
 
@@ -54,30 +47,22 @@ def test_model(model_name: str, model_id: str) -> tuple[bool, str]:
     Returns:
         tuple: (success: bool, message: str)
     """
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Testing: {model_name}")
     print(f"Model ID: {model_id}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     try:
         # Prepare request body with tool
         body = {
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": 1024,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": "What's the weather like in San Francisco?"
-                }
-            ],
-            "tools": [TEST_TOOL]
+            "messages": [{"role": "user", "content": "What's the weather like in San Francisco?"}],
+            "tools": [TEST_TOOL],
         }
 
         # Invoke model
-        response = bedrock_runtime.invoke_model(
-            modelId=model_id,
-            body=json.dumps(body)
-        )
+        response = bedrock_runtime.invoke_model(modelId=model_id, body=json.dumps(body))
 
         response_body = json.loads(response["body"].read())
 
@@ -85,21 +70,18 @@ def test_model(model_name: str, model_id: str) -> tuple[bool, str]:
         stop_reason = response_body.get("stop_reason")
         content = response_body.get("content", [])
 
-        print(f"✓ Model accessible")
+        print("✓ Model accessible")
         print(f"✓ Stop reason: {stop_reason}")
 
         # Check for tool use
-        has_tool_use = any(
-            block.get("type") == "tool_use"
-            for block in content
-        )
+        has_tool_use = any(block.get("type") == "tool_use" for block in content)
 
         if has_tool_use or stop_reason == "tool_use":
-            print(f"✓ Tool calling SUPPORTED")
-            print(f"✓ Model works with MCP integration")
+            print("✓ Tool calling SUPPORTED")
+            print("✓ Model works with MCP integration")
             return True, "✅ WORKING - Supports tool calls"
         else:
-            print(f"⚠ Tool calling not triggered (might still work)")
+            print("⚠ Tool calling not triggered (might still work)")
             return True, "⚠ ACCESSIBLE - Check tool support manually"
 
     except ClientError as e:
@@ -123,7 +105,7 @@ def test_model(model_name: str, model_id: str) -> tuple[bool, str]:
 
 def main():
     """Test all Claude models and generate a report."""
-    print(f"\n🔍 Testing Claude Models for MCP Tool Support")
+    print("\n🔍 Testing Claude Models for MCP Tool Support")
     print(f"Region: {region}")
     print(f"Models to test: {len(MODELS_TO_TEST)}")
     print("\nNote: Ensure AWS credentials are configured:")
@@ -138,9 +120,9 @@ def main():
         results.append((model_name, model_id, success, message))
 
     # Print summary
-    print(f"\n\n{'='*80}")
+    print(f"\n\n{'=' * 80}")
     print("SUMMARY REPORT")
-    print(f"{'='*80}\n")
+    print(f"{'=' * 80}\n")
 
     working_models = []
     failed_models = []
@@ -155,10 +137,10 @@ def main():
         else:
             failed_models.append((model_name, model_id))
 
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
     print(f"✅ Working: {len(working_models)}/{len(MODELS_TO_TEST)}")
     print(f"❌ Failed: {len(failed_models)}/{len(MODELS_TO_TEST)}")
-    print(f"{'='*80}\n")
+    print(f"{'=' * 80}\n")
 
     if failed_models:
         print("\n⚠️  RECOMMENDATIONS:")
