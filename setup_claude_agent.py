@@ -1,12 +1,15 @@
 
+
 import os
 import sys
 import json
 from pathlib import Path
 import argparse
+import shutil
 
 
 def get_config_path(force_windows=False, win_user=None):
+    # Only support Windows and WSL
     if force_windows:
         # Try to get Windows APPDATA from WSL
         win_appdata = os.getenv('WIN_APPDATA')
@@ -25,16 +28,11 @@ def get_config_path(force_windows=False, win_user=None):
                 win_home = os.getenv('WIN_HOME') or '/mnt/c/Users/' + os.getenv('USER', 'user')
             win_appdata = win_home + '/AppData/Roaming'
         return Path(win_appdata) / 'Claude' / 'claude_desktop_config.json'
-    if sys.platform == "win32":
-        appdata = os.getenv("APPDATA")
-        if not appdata:
-            raise EnvironmentError("APPDATA environment variable not found on Windows.")
-        return Path(appdata) / "Claude" / "claude_desktop_config.json"
-    elif sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
-    else:
-        # Assume Linux/Unix
-        return Path.home() / ".config" / "Claude" / "claude_desktop_config.json"
+    # Windows native
+    appdata = os.getenv("APPDATA")
+    if not appdata:
+        raise EnvironmentError("APPDATA environment variable not found on Windows.")
+    return Path(appdata) / "Claude" / "claude_desktop_config.json"
 
 
 def get_wsl_server_command(wsl_user=None):
@@ -52,22 +50,13 @@ def get_wsl_server_command(wsl_user=None):
     ]
 
 def get_server_command():
-    if sys.platform == "win32":
-        # Use WSL to run the server in Linux environment
-        return get_wsl_server_command()
-    else:
-        return "python3"
+    # Only support Windows and WSL
+    return get_wsl_server_command()
 
 
-def setup_venv_linux():
-    venv_dir = Path(".venv")
-    if not venv_dir.exists():
-        print("Creating Python venv in .venv...")
-        os.system("python3 -m venv .venv")
-        print("Installing requirements...")
-        os.system(".venv/bin/pip install -e .")
-    else:
-        print("Python venv already exists.")
+def setup_venv_windows():
+    # Only support Windows/WSL: just print a message
+    print("Please run this script in your WSL shell to set up the Python venv and install requirements.")
 
 
 def main():
@@ -106,15 +95,14 @@ def main():
             }
         }
     else:
-        print("Detected Unix/Mac: setting up venv and config.")
-        setup_venv_linux()
-        server_command = get_server_command()
-        server_args = [str(Path(__file__).parent.parent / "src" / "mcp_server" / "server.py")]
+        print("Detected Windows/WSL: configuring Claude Desktop to use WSL.")
+        setup_venv_windows()
+        server_cmd = get_server_command()
         config = {
             "mcpServers": {
                 "mcp-server": {
-                    "command": server_command,
-                    "args": server_args,
+                    "command": server_cmd[0],
+                    "args": server_cmd[1:],
                     "env": {}
                 }
             }
