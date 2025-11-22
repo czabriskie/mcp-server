@@ -584,7 +584,61 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guides on:
 - Using custom MCP servers with the web app
 - Testing guidelines and best practices
 
-### Quick Start
+
+
+## Setting Up MCP Agent for Claude Desktop (Windows, Mac, Linux, WSL)
+
+To use this MCP server as an agent in Claude Desktop on any platform:
+
+### 1. Run the Setup Script
+
+#### On Mac or Linux
+Run the following command from your project root:
+
+```bash
+python setup_claude_agent.py
+```
+
+This will:
+- Create a Python virtual environment in `.venv` if it doesn't exist
+- Install dependencies
+- Write the config file for Claude Desktop:
+  - **Mac:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+  - **Linux:** `~/.config/Claude/claude_desktop_config.json`
+
+
+#### On Windows (using WSL)
+1. Open your WSL terminal (Ubuntu or other Linux distro)
+2. Navigate to your project directory (e.g., `/home/<wsl-user>/Code/mcp-server`)
+3. **First, run the setup script without any flags to ensure the Python virtual environment and dependencies are set up in WSL:**
+  ```bash
+  python3 setup_claude_agent.py
+  ```
+4. **Then, run the setup script with your Windows and WSL usernames to write the config for Claude Desktop:**
+  ```bash
+  python3 setup_claude_agent.py --windows --win-user <YourWindowsUser> --wsl-user <YourWSLUser>
+  ```
+  For example:
+  ```bash
+  python3 setup_claude_agent.py --windows --win-user Sandra --wsl-user cam
+  ```
+5. This will:
+  - Create a Python virtual environment in `.venv` if needed (step 3)
+  - Install dependencies (step 3)
+  - Write the config file for Claude Desktop in Windows (`%APPDATA%\Claude\claude_desktop_config.json`) (step 4)
+  - Configure Claude Desktop to launch the MCP server via WSL, activating the venv automatically
+
+**Note:** You do not need to manually start the MCP server; Claude Desktop will launch it via WSL using the config.
+
+### 2. Start Claude Desktop
+
+Open Claude Desktop. Your MCP server agent should appear in the agent list.
+
+### 3. Test the Agent
+
+Send a message to the agent in Claude Desktop. You should receive a response from your MCP server running in WSL (Windows) or natively (Mac/Linux).
+
+---
 
 1. Fork the repository
 2. Create a feature branch
