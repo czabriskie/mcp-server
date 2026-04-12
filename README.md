@@ -13,6 +13,15 @@ source .venv/bin/activate   # macOS / Linux / WSL
 pip install -e .
 ```
 
+Or with [uv](https://docs.astral.sh/uv/):
+
+```bash
+git clone <repo-url> && cd mcp-server
+uv venv
+source .venv/bin/activate
+uv pip install -e .
+```
+
 ### 2. Connect to Claude Desktop
 
 Run the setup script to automatically write the Claude Desktop config file:
@@ -47,7 +56,7 @@ This writes `%APPDATA%\Claude\claude_desktop_config.json` and configures Claude 
 
 ### 3. Restart Claude Desktop
 
-Close and reopen Claude Desktop. You should see the MCP server tools available (look for the hammer icon).
+Close and reopen Claude Desktop. To verify the server is connected, go to **Settings → Developer** — you should see `mcp-server` with a green **running** badge.
 
 ### 4. Try It Out
 
@@ -89,7 +98,7 @@ For resources and prompts, see [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Running Tests
 
 ```bash
-pip install -e ".[dev]"
+pip install -e ".[dev]"   # or: uv pip install -e ".[dev]"
 pytest
 ```
 
